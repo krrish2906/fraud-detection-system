@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import axios from "axios";
 import "./App.css";
 
 const EMPTY_FORM = {
@@ -267,15 +268,10 @@ export default function App() {
         setError(null);
         setResult(null);
         try {
-            const res = await fetch("http://127.0.0.1:8000/predict", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(formData),
-            });
-            const data = await res.json();
-            setResult(data);
-        } catch {
-            setError("Could not connect to prediction server. Ensure the API is running on port 8000.");
+            const res = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/predict`, formData);
+            setResult(res.data);
+        } catch (err) {
+            setError("Could not connect to prediction server. Ensure the API is running.");
         } finally {
             setLoading(false);
         }
@@ -286,14 +282,9 @@ export default function App() {
         setError(null);
         setBatchResults(null);
         try {
-            const res = await fetch("http://127.0.0.1:8000/predict_batch", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(batchData),
-            });
-            const data = await res.json();
-            setBatchResults(data);
-        } catch {
+            const res = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/predict_batch`, batchData);
+            setBatchResults(res.data);
+        } catch (err) {
             setError("Batch prediction failed! Server not responding.");
         } finally {
             setLoading(false);
