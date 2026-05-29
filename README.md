@@ -1,50 +1,86 @@
-# 🛡️ Fraud Detection Application
+# 🛡️ FraudGuard: Enterprise Transaction Fraud Detection Platform (V2.0)
 
-A full-stack, machine-learning-powered web application built to identify fraudulent credit card transactions. 
+FraudGuard is an enterprise-grade, full-stack, machine-learning-powered transaction fraud detection system. The platform integrates a high-performance XGBoost prediction pipeline, resilient dual-dialect persistence, in-memory caching, explainable AI (XAI) feature attributions, asynchronous background batch processing, and a premium modern light-themed analyst dashboard.
 
-## Features
-- **Real-Time Single Prediction**: Manually enter continuous transaction data to get an instant fraud probability.
-- **Batch Processing Mode**: Upload large `.csv` datasets (e.g. `credit_data.csv` exported from banking systems) and effortlessly run predictions across all transactions continuously.
-- **Client Persistence**: Batch data successfully persists via IndexedDB so large datasets won't wipe natively on page refresh or browser reload.
-- **CSV Export**: Instantly download your batch prediction results containing `fraud_probability` and `prediction`.
-- **Modern UI**: Polished, dark-themed responsive React interface built from the ground up without UI libraries.
+---
 
-## Tech Stack
-- **Frontend**: React (Vite), Vanilla CSS, IndexedDB
-- **Backend**: Python, FastAPI, Uvicorn, Scikit-Learn
-- **Dev Env**: Node.js & Pip
+## 🏗️ Platform Architecture & Features
 
-## Installation & Setup
+### 1. Robust Storage Layer (`backend/src/db.py`)
+- **Dual-Dialect Connection Pool**: Integrates seamlessly with serverless PostgreSQL (**NeonDB**) via psycopg2 connection pooling for production.
+- **SQLite Fallback**: Automatically activates a local SQLite database (`sqlite:///./fraud_detection.db`) on startup if NeonDB is unconfigured or offline, ensuring zero interruptions in local development.
+- **Relational Tables**: Automatically migrates schemas on startup:
+  - `transactions`: Logs RAW PCA features, amount, predicted risk, and analyst review status.
+  - `audit_logs`: Records a detailed audit trail of status changes (e.g. *"Approved by System Analyst"*).
+  - `batch_jobs`: Tracks asynchronous progress parameters.
 
-### 1. Backend (FastAPI + Machine Learning)
-Navigate to the backend directory, initialize a python virtual environment, and install all ML application requirements.
+### 2. High-Speed Prediction Caching (`backend/src/cache.py`)
+- **Thread-Safe Caching**: Employs an in-memory LRU (Least Recently Used) cache (`max_size=1000`) protecting the XGBoost classifier from redundant computations.
+- **Key Hashing**: Features are hashed (SHA-256) to index cache records instantly.
+- **Pluggable Redis**: Designed to seamlessly bind to a Redis cache layer if environment connection variables are supplied.
+
+### 3. Local Explainable AI (XAI) Pipeline (`backend/src/explain.py`)
+- **Perturbation Attribution**: Calculates local feature attributions using the LOCO (Leave-One-Covariate-Out) perturbation technique.
+- **Mathematical Driver Isolation**: Substitutes each of the 29 raw features sequentially with its population mean (from the imputer training weights) to isolate positive drivers (pushed risk up) and negative drivers (pushed risk down).
+
+### 4. Asynchronous Batch Scanner (`backend/main.py`)
+- **Concurrent Task Queue**: Uploaded CSV transaction sheets are processed asynchronously via FastAPI's concurrent `BackgroundTasks` queue.
+- **Immediate Handshake**: Returns a `task_id` instantly to the client, preventing browser gateway timeouts on huge CSV sheets.
+- **Progress Polling**: Exposes dynamic percentage tracking (`/batch/status/{id}`) and exports results to a downloadable CSV (`/batch/download/{id}`).
+
+### 5. Premium Analyst Workspace (`frontend/`)
+- **Stationary Coordinate Sidebar**: Stationary coordinate layout locks navigation in place on page scroll, with fluid margin offsets to ensure elegant content spacing.
+- **Modular JSX Components**: Separated template components for manual inference (`NewPrediction`), batch uploading (`BatchProcess`), incident tables (`ReviewQueue`), metrics widgets (`AnalyticsDashboard`), and slider panels (`TransactionInspector`).
+- **Standardized Visual Icons**: Unified sidebar navigation icons using consistent Lucide configurations (`size={18}`, `strokeWidth={2}`).
+- **Subtle Watermark Decorations**: Embedded floating banknote and coin watermarks inside the main canvas margins (`z-index: 1`), layered beneath positioned opaque active elements (`z-index: 2`).
+- **Sleek Input Fields**: Inverted browser-native input spinners using CSS filters to render them in clean white.
+- **Purely Database-Driven**: Serves 100% realistic database records and XGBoost models, completely free of hardcoded mock statistics or static fallbacks.
+
+---
+
+## 🛠️ Tech Stack & Dependencies
+
+*   **Frontend**: React (Vite), Vanilla CSS, Recharts, Lucide-React, Axios
+*   **Backend**: Python, FastAPI, Uvicorn, SQLite3, psycopg2-binary, Scikit-Learn, Pandas, XGBoost
+
+---
+
+## 🚀 Installation & Local Setup
+
+### 1. Backend Service Setup
+Navigate to the `backend` directory, initialize a python virtual environment, and install dependencies:
 ```bash
 cd backend
 python -m venv venv
 
-# Windows
+# Windows Command Prompt
 venv\Scripts\activate
-# Mac/Linux: source venv/bin/activate
+# Mac/Linux
+source venv/bin/activate
 
 pip install -r requirements.txt
 ```
-To run the server:
+
+To boot the FastAPI server locally:
 ```bash
 uvicorn main:app --reload
 ```
-The server API endpoints will be continuously listening at `http://127.0.0.1:8000`.
+The REST API endpoints will start listening at `http://localhost:8000`.
 
-### 2. Frontend (React + Vite)
-In a secondary terminal tab, spin up the user interface.
+### 2. Frontend Client Setup
+In a secondary terminal window, navigate to the `frontend` folder and start the Vite client:
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
-The web app will start locally. Open the provided localhost URL in your browser.
+Open the provided localhost address (typically `http://localhost:5173`) in your web browser.
 
-## Batch Interface Guidelines
-1. Select "UPLOAD CSV" and provide a standard transaction payload `.csv`. It must exactly include the numerical columns `Amount` and PCA features `V1` through `V28`.
-2. The application will acknowledge the payload and transparently switch to **Batch Processing Mode**.
-3. Strike the **Run Batch Prediction** button.
-4. When finished modeling, capture your mapped statistics securely by downloading via the provided export mechanism.
+---
+
+## 🧪 Pipeline Validation & Testing
+You can verify the end-to-end inference, explainability, and caching pipeline by running the test harness script inside the activated backend virtual environment:
+```powershell
+python test.py
+```
+This script draws a real vector from the local dataset and returns the predicted probability class along with positive XAI attribution coefficients.
