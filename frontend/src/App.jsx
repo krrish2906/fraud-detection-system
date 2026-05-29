@@ -65,6 +65,7 @@ export default function App() {
     const [batchFile, setBatchFile] = useState(null);
     const [batchError, setBatchError] = useState("");
     const [batchTask, setBatchTask] = useState(null);
+    const [downloadTaskId, setDownloadTaskId] = useState(null);
     const [batchProgress, setBatchProgress] = useState(0);
     const [batchStatus, setBatchStatus] = useState("");
     const [batchProcessedCount, setBatchProcessedCount] = useState(0);
@@ -200,6 +201,11 @@ export default function App() {
         if (!file) return;
         setBatchFile(file);
         setBatchError("");
+        setBatchStatus("");
+        setBatchProgress(0);
+        setBatchProcessedCount(0);
+        setBatchTotalCount(0);
+        setDownloadTaskId(null);
     };
 
     const handleBatchUpload = () => {
@@ -208,6 +214,7 @@ export default function App() {
         setBatchError("");
         setBatchStatus("pending");
         setBatchProgress(0);
+        setDownloadTaskId(null);
 
         const reader = new FileReader();
         reader.onload = async (ev) => {
@@ -235,6 +242,7 @@ export default function App() {
 
                 const res = await axios.post(`${API_BASE_URL}/predict_batch`, transactionsList);
                 setBatchTask(res.data.task_id);
+                setDownloadTaskId(res.data.task_id);
                 setBatchTotalCount(res.data.total_records);
                 setBatchProcessedCount(0);
             } catch (err) {
@@ -399,7 +407,7 @@ export default function App() {
                         handleCsvSelect={handleCsvSelect}
                         handleBatchUpload={handleBatchUpload}
                         API_BASE_URL={API_BASE_URL}
-                        batchTask={batchTask}
+                        batchTask={downloadTaskId}
                     />
                 )}
 
