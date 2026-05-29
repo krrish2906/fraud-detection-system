@@ -7,7 +7,9 @@ import {
     UploadCloud,
     DollarSign,
     Coins,
-    Banknote
+    Banknote,
+    Menu,
+    X
 } from "lucide-react";
 
 import NewPrediction from "./components/NewPrediction";
@@ -29,6 +31,7 @@ const PCA_KEYS = Array.from({ length: 28 }, (_, i) => `V${i + 1}`);
 
 export default function App() {
     const [activeTab, setActiveTab] = useState("new");
+    const [sidebarOpen, setSidebarOpen] = useState(false);
 
 
 
@@ -271,7 +274,23 @@ export default function App() {
     return (
         <div className="app-container">
             {/* Sidebar Navigation Panel */}
-            <aside className="sidebar">
+            {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)}></div>}
+
+            {/* Mobile Header Bar */}
+            <div className="mobile-header">
+                <button type="button" className="btn-menu-toggle" onClick={() => setSidebarOpen(true)}>
+                    <Menu size={20} strokeWidth={2} />
+                </button>
+                <span className="mobile-brand-name">FRAUDGUARD</span>
+            </div>
+
+            <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
+                <div className="sidebar-mobile-header">
+                    <button type="button" className="btn-menu-close" onClick={() => setSidebarOpen(false)}>
+                        <X size={20} strokeWidth={2} />
+                    </button>
+                </div>
+
                 <div className="brand">
                     <div className="brand-logo">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -286,7 +305,7 @@ export default function App() {
                 <nav className="nav-menu">
                     <div
                         className={`nav-item ${activeTab === "new" ? "active" : ""}`}
-                        onClick={() => setActiveTab("new")}
+                        onClick={() => { setActiveTab("new"); setSidebarOpen(false); }}
                     >
                         <PlusCircle className="nav-icon" size={18} strokeWidth={2} />
                         <span>New Prediction</span>
@@ -294,7 +313,7 @@ export default function App() {
 
                     <div
                         className={`nav-item ${activeTab === "batch" ? "active" : ""}`}
-                        onClick={() => setActiveTab("batch")}
+                        onClick={() => { setActiveTab("batch"); setSidebarOpen(false); }}
                     >
                         <UploadCloud className="nav-icon" size={18} strokeWidth={2} />
                         <span>Batch Process</span>
@@ -302,7 +321,7 @@ export default function App() {
 
                     <div
                         className={`nav-item ${activeTab === "queue" ? "active" : ""}`}
-                        onClick={() => setActiveTab("queue")}
+                        onClick={() => { setActiveTab("queue"); setSidebarOpen(false); }}
                     >
                         <ListFilter className="nav-icon" size={18} strokeWidth={2} />
                         <span>Review Queue</span>
@@ -315,7 +334,7 @@ export default function App() {
 
                     <div
                         className={`nav-item ${activeTab === "dashboard" ? "active" : ""}`}
-                        onClick={() => setActiveTab("dashboard")}
+                        onClick={() => { setActiveTab("dashboard"); setSidebarOpen(false); }}
                     >
                         <LayoutDashboard className="nav-icon" size={18} strokeWidth={2} />
                         <span>Analytics Dashboard</span>
