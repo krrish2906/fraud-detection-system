@@ -9,7 +9,9 @@ import {
     Coins,
     Banknote,
     Menu,
-    X
+    X,
+    Eye,
+    EyeOff
 } from "lucide-react";
 
 import NewPrediction from "./components/NewPrediction";
@@ -42,6 +44,7 @@ export default function App() {
     const [authPassword, setAuthPassword] = useState("");
     const [authError, setAuthError] = useState("");
     const [authLoading, setAuthLoading] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
 
     // Apply axios common auth header dynamically
     useEffect(() => {
@@ -107,6 +110,7 @@ export default function App() {
         pending_reviews: 0,
         false_positive_ratio: 0,
         average_resolution_time: 0,
+        total_analyzed_volume: 0,
         timeline: [],
         class_breakdown: { Normal: 0, Fraud: 0 },
         global_importances: [],
@@ -349,7 +353,29 @@ export default function App() {
     if (!token) {
         return (
             <div className="auth-container">
-                <div className="auth-card">
+                {/* Subtle watermark background decorations on the Login/Register page backdrop */}
+                <div className="workspace-decorations" style={{ display: "block" }}>
+                    <div className="watermark-item top-right">
+                        <DollarSign size={160} strokeWidth={1} />
+                    </div>
+                    <div className="watermark-item mid-left">
+                        <Banknote size={140} strokeWidth={1} />
+                    </div>
+                    <div className="watermark-item bottom-right">
+                        <Coins size={150} strokeWidth={1} />
+                    </div>
+                    <div className="watermark-item top-left-decor">
+                        <Coins size={110} strokeWidth={1} />
+                    </div>
+                    <div className="watermark-item mid-right-decor">
+                        <DollarSign size={130} strokeWidth={1} />
+                    </div>
+                    <div className="watermark-item bottom-left-decor">
+                        <Banknote size={120} strokeWidth={1} />
+                    </div>
+                </div>
+
+                <div className="auth-card" style={{ position: "relative", zIndex: 11 }}>
                     <div className="brand" style={{ justifyContent: "center", marginBottom: "28px" }}>
                         <div className="brand-logo">
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -385,15 +411,35 @@ export default function App() {
 
                         <div className="form-group" style={{ marginBottom: "24px" }}>
                             <label className="form-label">Password</label>
-                            <input
-                                type="password"
-                                className="filter-input"
-                                style={{ width: "100%", height: "42px" }}
-                                placeholder="Enter password"
-                                value={authPassword}
-                                onChange={(e) => setAuthPassword(e.target.value)}
-                                required
-                            />
+                            <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                                <input
+                                    type={showPassword ? "text" : "password"}
+                                    className="filter-input"
+                                    style={{ width: "100%", height: "42px", paddingRight: "40px" }}
+                                    placeholder="Enter password"
+                                    value={authPassword}
+                                    onChange={(e) => setAuthPassword(e.target.value)}
+                                    required
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    style={{
+                                        position: "absolute",
+                                        right: "12px",
+                                        background: "none",
+                                        border: "none",
+                                        color: "var(--text-muted)",
+                                        cursor: "pointer",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        padding: 0
+                                    }}
+                                >
+                                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                </button>
+                            </div>
                         </div>
 
                         <button type="submit" className="btn-primary" style={{ width: "100%", height: "44px", justifyContent: "center", marginBottom: "16px" }} disabled={authLoading}>
@@ -410,6 +456,7 @@ export default function App() {
                                 onClick={() => {
                                     setIsRegistering(!isRegistering);
                                     setAuthError("");
+                                    setShowPassword(false);
                                 }}
                             >
                                 {isRegistering ? "Sign In" : "Register Now"}
@@ -494,8 +541,7 @@ export default function App() {
                         </div>
                         <button
                             type="button"
-                            className="btn-secondary"
-                            style={{ padding: "4px 8px", fontSize: "11px", height: "auto", border: "1px solid var(--border)", borderRadius: "6px" }}
+                            className="btn-logout"
                             onClick={() => {
                                 setToken("");
                                 setUsername("");

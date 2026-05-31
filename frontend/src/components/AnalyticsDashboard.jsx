@@ -38,57 +38,59 @@ export default function AnalyticsDashboard({ stats }) {
             <div className="metrics-grid">
                 <div className="metric-card primary">
                     <div className="metric-header">
-                        <span className="metric-label">Predictions Run</span>
+                        <span className="metric-label">Predictions Classified</span>
                         <div className="metric-icon-wrap">
                             <TrendingUp size={16} />
                         </div>
                     </div>
                     <div className="metric-value">{stats.total_volume}</div>
-                    <div className="metric-desc">Total classification vectors logged</div>
+                    <div className="metric-desc">Total transactions run through the model</div>
                 </div>
 
                 <div className="metric-card error">
                     <div className="metric-header">
-                        <span className="metric-label">Flagged Fraud Rate</span>
-                        <div className="metric-icon-wrap">
-                            <AlertTriangle size={16} />
-                        </div>
-                    </div>
-                    <div className="metric-value">{stats.overall_fraud_rate}%</div>
-                    <div className="metric-desc">Percentage classified as Fraud</div>
-                </div>
-
-                <div className="metric-card warning">
-                    <div className="metric-header">
-                        <span className="metric-label">Flagged Anomalies</span>
+                        <span className="metric-label">Fraud Detected</span>
                         <div className="metric-icon-wrap">
                             <Shield size={16} />
                         </div>
                     </div>
                     <div className="metric-value">{stats.pending_reviews}</div>
-                    <div className="metric-desc">Total anomalous transactions flagged</div>
+                    <div className="metric-desc">Anomalies flagged as high-risk incidents</div>
+                </div>
+
+                <div className="metric-card warning">
+                    <div className="metric-header">
+                        <span className="metric-label">Fraud Ratio</span>
+                        <div className="metric-icon-wrap">
+                            <AlertTriangle size={16} />
+                        </div>
+                    </div>
+                    <div className="metric-value">{stats.overall_fraud_rate}%</div>
+                    <div className="metric-desc">Percentage of predictions flagged as fraud</div>
                 </div>
 
                 <div className="metric-card info">
                     <div className="metric-header">
-                        <span className="metric-label">Average Risk Score</span>
+                        <span className="metric-label">Average Fraud Risk</span>
                         <div className="metric-icon-wrap">
                             <CheckCircle2 size={16} />
                         </div>
                     </div>
                     <div className="metric-value">{stats.false_positive_ratio}%</div>
-                    <div className="metric-desc">Mean probability across predictions</div>
+                    <div className="metric-desc">Mean probability score across submissions</div>
                 </div>
 
                 <div className="metric-card success">
                     <div className="metric-header">
-                        <span className="metric-label">Peak Anomaly Risk</span>
+                        <span className="metric-label">Total Scanned Volume</span>
                         <div className="metric-icon-wrap">
-                            <AlertTriangle size={16} />
+                            <DollarSign size={16} />
                         </div>
                     </div>
-                    <div className="metric-value">{stats.average_resolution_time}%</div>
-                    <div className="metric-desc">Maximum fraud probability recorded</div>
+                    <div className="metric-value" style={{ textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
+                        ${parseFloat(stats.total_analyzed_volume || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </div>
+                    <div className="metric-desc">Sum of all transaction amounts analyzed</div>
                 </div>
             </div>
 
