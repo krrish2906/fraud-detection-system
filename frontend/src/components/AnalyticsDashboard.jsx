@@ -1,3 +1,5 @@
+import { useState, useEffect } from "react";
+import axios from "axios";
 import {
     ResponsiveContainer,
     AreaChart,
@@ -16,7 +18,6 @@ import {
 import {
     TrendingUp,
     AlertTriangle,
-    Clock,
     CheckCircle2,
     Shield,
     DollarSign
@@ -26,7 +27,50 @@ const renderPieSector = (props) => {
     return <Sector {...props} fill={props.payload?.fill || "var(--primary)"} />;
 };
 
-export default function AnalyticsDashboard({ stats }) {
+const INITIAL_STATS = {
+    total_volume: 0,
+    overall_fraud_rate: 0,
+    pending_reviews: 0,
+    false_positive_ratio: 0,
+    average_resolution_time: 0,
+    total_analyzed_volume: 0,
+    timeline: [],
+    class_breakdown: { Normal: 0, Fraud: 0 },
+    global_importances: [],
+    latest_fraud_explanation: null
+};
+
+export default function AnalyticsDashboard({ API_BASE_URL }) {
+    const [stats, setStats] = useState(INITIAL_STATS);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchStats = async () => {
+            try {
+                setLoading(true);
+                const statsRes = await axios.get(`${API_BASE_URL}/dashboard/stats`);
+                setStats(statsRes.data);
+            } catch (err) {
+                console.error("Failed to load dashboard statistics:", err);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchStats();
+    }, [API_BASE_URL]);
+
+    if (loading) {
+        return (
+            <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "400px", color: "var(--text-secondary)" }}>
+                <div style={{ textAlign: "center" }}>
+                    <div style={{ border: "3px solid var(--border)", borderTop: "3px solid var(--primary)", borderRadius: "50%", width: "40px", height: "40px", animation: "spin 1s linear infinite", margin: "0 auto 16px" }}></div>
+                    <span>Loading statistics...</span>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="dashboard-content">
             <div className="page-header">

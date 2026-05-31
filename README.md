@@ -1,47 +1,54 @@
-# 🛡️ FraudGuard: Enterprise Transaction Fraud Detection Platform (V2.0)
+# 🛡️ FraudGuard: Self-Service Transaction Fraud Prediction Platform
 
-FraudGuard is an enterprise-grade, full-stack, machine-learning-powered transaction fraud detection system. The platform integrates a high-performance XGBoost prediction pipeline, resilient dual-dialect persistence, in-memory caching, explainable AI (XAI) feature attributions, asynchronous background batch processing, and a premium modern light-themed analyst dashboard.
+FraudGuard is an advanced, full-stack, machine-learning-powered transaction fraud classification system. The platform integrates a high-performance XGBoost prediction pipeline, resilient dual-dialect persistence, in-memory caching, local Explainable AI (XAI) feature attributions, asynchronous background batch processing, and a premium modern modular dashboard with isolated JWT-based user spaces.
 
 ---
 
 ## 🏗️ Platform Architecture & Features
 
-### 1. Robust Storage Layer (`backend/src/db.py`)
-- **Dual-Dialect Connection Pool**: Integrates seamlessly with serverless PostgreSQL (**NeonDB**) via psycopg2 connection pooling for production.
-- **SQLite Fallback**: Automatically activates a local SQLite database (`sqlite:///./fraud_detection.db`) on startup if NeonDB is unconfigured or offline, ensuring zero interruptions in local development.
-- **Relational Tables**: Automatically migrates schemas on startup:
-  - `transactions`: Logs RAW PCA features, amount, predicted risk, and analyst review status.
-  - `audit_logs`: Records a detailed audit trail of status changes (e.g. *"Approved by System Analyst"*).
-  - `batch_jobs`: Tracks asynchronous progress parameters.
+### 1. Robust Database & User Isolation Layer (`backend/src/db.py`)
+*   **Dual-Dialect Connection Pool**: Integrates seamlessly with serverless PostgreSQL (**NeonDB**) via psycopg2 connection pooling for production.
+*   **SQLite Fallback**: Automatically activates a local SQLite database (`sqlite:///./fraud_detection.db`) on startup if NeonDB is unconfigured or offline, ensuring zero interruptions in local development.
+*   **Relational Database Schemas**:
+    *   `users`: Stores securely salted password hashes and usernames.
+    *   `transactions`: Logs RAW PCA features, transaction amounts, predicted risk probability, and model class output mapped strictly to the creator's `user_id`.
+    *   `batch_jobs`: Binds asynchronous process progress variables to the job owner's `user_id`.
+*   **Dynamic Startup Migrations**: Automatically runs safe `ALTER TABLE` routine checks on service startup to dynamically inject foreign key boundaries for seamless backward compatibility.
 
-### 2. High-Speed Prediction Caching (`backend/src/cache.py`)
-- **Thread-Safe Caching**: Employs an in-memory LRU (Least Recently Used) cache (`max_size=1000`) protecting the XGBoost classifier from redundant computations.
-- **Key Hashing**: Features are hashed (SHA-256) to index cache records instantly.
-- **Pluggable Redis**: Designed to seamlessly bind to a Redis cache layer if environment connection variables are supplied.
+### 2. Secure JWT Authentication Pipeline (`backend/src/auth.py`)
+*   **PBKDF2 Password Hashing**: Implements standard salt-based password cryptography using 100,000 hashing rounds for optimal system portability.
+*   **JSON Web Tokens (JWT)**: Signs and verifies client session authorization payloads, ensuring that database queries are strictly isolated to the authenticated user's dashboard.
+*   **FastAPI Dependency Injection**: Authenticates routes on all downstream prediction and history queries, returning a `401 Unauthorized` block on token expirations.
 
-### 3. Local Explainable AI (XAI) Pipeline (`backend/src/explain.py`)
-- **Perturbation Attribution**: Calculates local feature attributions using the LOCO (Leave-One-Covariate-Out) perturbation technique.
-- **Mathematical Driver Isolation**: Substitutes each of the 29 raw features sequentially with its population mean (from the imputer training weights) to isolate positive drivers (pushed risk up) and negative drivers (pushed risk down).
+### 3. High-Speed Prediction Caching (`backend/src/cache.py`)
+*   **Thread-Safe Caching**: Employs an in-memory LRU (Least Recently Used) cache (`max_size=1000`) protecting the XGBoost classifier from redundant computations on identical vector features.
+*   **Key Hashing**: PCA features are hashed dynamically using SHA-256 for instant cache indexing.
 
-### 4. Asynchronous Batch Scanner (`backend/main.py`)
-- **Concurrent Task Queue**: Uploaded CSV transaction sheets are processed asynchronously via FastAPI's concurrent `BackgroundTasks` queue.
-- **Immediate Handshake**: Returns a `task_id` instantly to the client, preventing browser gateway timeouts on huge CSV sheets.
-- **Progress Polling**: Exposes dynamic percentage tracking (`/batch/status/{id}`) and exports results to a downloadable CSV (`/batch/download/{id}`).
+### 4. Local Explainable AI (XAI) Attributions (`backend/src/explain.py`)
+*   **Perturbation Analysis**: Calculates local feature attributions using the LOCO (Leave-One-Covariate-Out) technique.
+*   **Mathematical Driver Isolation**: Substitutes each of the 29 raw vector inputs sequentially with its imputer average to isolate positive drivers (pushed risk up) and negative drivers (pushed risk down), rendering them as interactive charts.
 
-### 5. Premium Analyst Workspace (`frontend/`)
-- **Stationary Coordinate Sidebar**: Stationary coordinate layout locks navigation in place on page scroll, with fluid margin offsets to ensure elegant content spacing.
-- **Modular JSX Components**: Separated template components for manual inference (`NewPrediction`), batch uploading (`BatchProcess`), incident tables (`ReviewQueue`), metrics widgets (`AnalyticsDashboard`), and slider panels (`TransactionInspector`).
-- **Standardized Visual Icons**: Unified sidebar navigation icons using consistent Lucide configurations (`size={18}`, `strokeWidth={2}`).
-- **Subtle Watermark Decorations**: Embedded floating banknote and coin watermarks inside the main canvas margins (`z-index: 1`), layered beneath positioned opaque active elements (`z-index: 2`).
-- **Sleek Input Fields**: Inverted browser-native input spinners using CSS filters to render them in clean white.
-- **Purely Database-Driven**: Serves 100% realistic database records and XGBoost models, completely free of hardcoded mock statistics or static fallbacks.
+### 5. Concurrent Background Batch Process (`backend/main.py`)
+*   **Immediate Client Handshake**: Uploaded CSV sheets are parsed and delegated to FastAPI's concurrent `BackgroundTasks` queue, returning a `task_id` instantly to avoid connection timeouts.
+*   **Progress Tracking**: Exposes dynamic percentage tracking (`/batch/status/{id}`) and exports classifications to a downloadable CSV sheet (`/batch/download/{id}`).
+
+### 6. Premium Responsive Workspace (`frontend/`)
+*   **Modular Component Architecture**: Extracted all business logic, states, and hooks into isolated modular child files:
+    *   `Login.jsx` & `Register.jsx`: Sleek light-themed glassmorphic credentials forms with animated currency watermark backgrounds and show/hide password buttons.
+    *   `Sidebar.jsx`: Fully responsive overlay layouts, active tabs, and online user indicators.
+    *   `NewPrediction.jsx`: Fully encapsulates manual prediction inputs, autofills, and classification calls.
+    *   `BatchProcess.jsx`: Handles drag-and-drop CSV uploads, parsing progress cards, and background status pollers.
+    *   `ReviewQueue.jsx`: Operates prediction search queries, amount ranges, and transaction page metrics.
+    *   `AnalyticsDashboard.jsx`: Pulls individual timelines, pie charts, and global XGBoost importances dynamically.
+*   **Globally Persistent Tabs**: Saves tab indices dynamically inside `sessionStorage` (`fg_active_tab`) so that browser refreshes do not disrupt client context.
+*   **Purely Model-Driven**: Renders 100% database-driven predictions and Recharts metrics, completely free of generic hardcoded mock parameters.
 
 ---
 
 ## 🛠️ Tech Stack & Dependencies
 
 *   **Frontend**: React (Vite), Vanilla CSS, Recharts, Lucide-React, Axios
-*   **Backend**: Python, FastAPI, Uvicorn, SQLite3, psycopg2-binary, Scikit-Learn, Pandas, XGBoost
+*   **Backend**: Python, FastAPI, Uvicorn, SQLite3, psycopg2-binary, PyJWT, Scikit-Learn, Pandas, XGBoost
 
 ---
 
@@ -55,6 +62,7 @@ python -m venv venv
 
 # Windows Command Prompt
 venv\Scripts\activate
+
 # Mac/Linux
 source venv/bin/activate
 

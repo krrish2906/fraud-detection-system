@@ -1,21 +1,107 @@
+import { useState, useEffect } from "react";
+import axios from "axios";
 import {
     UploadCloud,
     AlertTriangle,
     FileDown
 } from "lucide-react";
 
-export default function BatchProcess({
-    batchFile,
-    batchError,
-    batchStatus,
-    batchProgress,
-    batchProcessedCount,
-    batchTotalCount,
-    handleCsvSelect,
-    handleBatchUpload,
-    API_BASE_URL,
-    batchTask
-}) {
+const PCA_KEYS = Array.from({ length: 28 }, (_, i) => `V${i + 1}`);
+
+export default function BatchProcess({ API_BASE_URL }) {
+    const [batchFile, setBatchFile] = useState(null);
+    const [batchError, setBatchError] = useState("");
+    const [batchStatus, setBatchStatus] = useState("");
+    const [batchProgress, setBatchProgress] = useState(0);
+    const [batchProcessedCount, setBatchProcessedCount] = useState(0);
+    const [batchTotalCount, setBatchTotalCount] = useState(0);
+    const [batchTask, setBatchTask] = useState(null);
+    const [downloadTaskId, setDownloadTaskId] = useState(null);
+
+    // CSV Drag-and-Drop Batch Uploader
+    const handleCsvSelect = (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setBatchFile(file);
+        setBatchError("");
+        setBatchStatus("");
+        setBatchProgress(0);
+        setBatchProcessedCount(0);
+        setBatchTotalCount(0);
+        setDownloadTaskId(null);
+        setBatchTask(null);
+    };
+
+    const handleBatchUpload = () => {
+        if (!batchFile) return;
+
+        setBatchError("");
+        setBatchStatus("pending");
+        setBatchProgress(0);
+        setDownloadTaskId(null);
+
+        const reader = new FileReader();
+        reader.onload = async (ev) => {
+            try {
+                const text = ev.target.result;
+                const lines = text.trim().split(/\r?\n/);
+                if (lines.length < 2) throw new Error("CSV must contain headers and records");
+
+                const headers = lines[0].split(",").map((h) => h.replace(/^"|"$/g, "").trim());
+                const missing = ["Amount", ...PCA_KEYS].filter((k) => !headers.includes(k));
+                if (missing.length) throw new Error(`Missing columns: ${missing.join(", ")}`);
+
+                const transactionsList = [];
+                for (let i = 1; i < lines.length; i++) {
+                    if (!lines[i].trim()) continue;
+                    const values = lines[i].split(",").map((v) => v.replace(/^"|"$/g, "").trim());
+                    const row = {};
+                    headers.forEach((h, idx) => { row[h] = values[idx] ?? ""; });
+
+                    transactionsList.push({
+                        Amount: row.Amount === "" ? 0.0 : parseFloat(row.Amount),
+                        ...Object.fromEntries(PCA_KEYS.map((k) => [k, row[k] === "" ? 0.0 : parseFloat(row[k])]))
+                    });
+                }
+
+                const res = await axios.post(`${API_BASE_URL}/predict_batch`, transactionsList);
+                setBatchTask(res.data.task_id);
+                setDownloadTaskId(res.data.task_id);
+                setBatchTotalCount(res.data.total_records);
+                setBatchProcessedCount(0);
+            } catch (err) {
+                setBatchError(err.message || "Failed to parse CSV file");
+                setBatchStatus("");
+            }
+        };
+        reader.readAsText(batchFile);
+    };
+
+    // Poll background task progress
+    useEffect(() => {
+        let intervalId;
+        if (batchTask) {
+            intervalId = setInterval(async () => {
+                try {
+                    const res = await axios.get(`${API_BASE_URL}/batch/status/${batchTask}`);
+                    setBatchStatus(res.data.status);
+                    setBatchProgress(res.data.progress_percent);
+                    setBatchProcessedCount(res.data.processed_records);
+
+                    if (res.data.status === "completed" || res.data.status === "failed") {
+                        clearInterval(intervalId);
+                        setBatchTask(null);
+                    }
+                } catch (err) {
+                    console.error("Error polling batch status:", err);
+                    clearInterval(intervalId);
+                    setBatchTask(null);
+                }
+            }, 1000);
+        }
+        return () => clearInterval(intervalId);
+    }, [batchTask, API_BASE_URL]);
+
     return (
         <div>
             <div className="page-header">
@@ -88,7 +174,7 @@ export default function BatchProcess({
                             </span>
                             {batchStatus === "completed" && (
                                 <a
-                                    href={`${API_BASE_URL}/batch/download/${batchTask || "last"}`}
+                                    href={`${API_BASE_URL}/batch/download/${downloadTaskId || "last"}`}
                                     target="_blank"
                                     rel="noreferrer"
                                     className="btn-primary"
