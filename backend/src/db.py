@@ -137,6 +137,14 @@ def init_db():
     
     # Transactions Table
     if IS_POSTGRES:
+        create_users_table = """
+        CREATE TABLE IF NOT EXISTS users (
+            id SERIAL PRIMARY KEY,
+            username VARCHAR(100) UNIQUE NOT NULL,
+            password_hash VARCHAR(255) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """
         create_transactions_table = """
         CREATE TABLE IF NOT EXISTS transactions (
             id SERIAL PRIMARY KEY,
@@ -171,6 +179,14 @@ def init_db():
         """
     else:
         # SQLite dialect
+        create_users_table = """
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """
         create_transactions_table = """
         CREATE TABLE IF NOT EXISTS transactions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -207,9 +223,43 @@ def init_db():
     conn, is_pg = get_connection()
     try:
         cursor = conn.cursor()
+        cursor.execute(create_users_table)
         cursor.execute(create_transactions_table)
         cursor.execute(create_audit_logs_table)
         cursor.execute(create_batch_jobs_table)
+        
+        # Safe column migration check for transactions and batch_jobs
+        if is_pg:
+            cursor.execute("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name='transactions' AND column_name='user_id'
+            """)
+            if not cursor.fetchone():
+                cursor.execute("ALTER TABLE transactions ADD COLUMN user_id INTEGER NULL")
+                print("[DATABASE] Migrated transactions table to add user_id column (PostgreSQL).")
+                
+            cursor.execute("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name='batch_jobs' AND column_name='user_id'
+            """)
+            if not cursor.fetchone():
+                cursor.execute("ALTER TABLE batch_jobs ADD COLUMN user_id INTEGER NULL")
+                print("[DATABASE] Migrated batch_jobs table to add user_id column (PostgreSQL).")
+        else:
+            cursor.execute("PRAGMA table_info(transactions)")
+            cols = [row[1] for row in cursor.fetchall()]
+            if "user_id" not in cols:
+                cursor.execute("ALTER TABLE transactions ADD COLUMN user_id INTEGER NULL")
+                print("[DATABASE] Migrated transactions table to add user_id column (SQLite).")
+                
+            cursor.execute("PRAGMA table_info(batch_jobs)")
+            cols_batch = [row[1] for row in cursor.fetchall()]
+            if "user_id" not in cols_batch:
+                cursor.execute("ALTER TABLE batch_jobs ADD COLUMN user_id INTEGER NULL")
+                print("[DATABASE] Migrated batch_jobs table to add user_id column (SQLite).")
+
         conn.commit()
         cursor.close()
         print("[DATABASE] Database tables initialized successfully.")

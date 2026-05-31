@@ -4,13 +4,14 @@ import uuid
 import csv
 import datetime
 from typing import List, Optional
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Query
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Query, Depends
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.predictor import predict
 from src.db import init_db, execute_read, execute_write
+from src.auth import get_current_user
 
 # App metadata
 app = FastAPI(
@@ -91,6 +92,59 @@ class StatusUpdateRequest(BaseModel):
     actor: Optional[str] = "Analyst"
 
 
+class AuthRequest(BaseModel):
+    username: str
+    password: str
+
+
+@app.post("/auth/register")
+def register(request: AuthRequest):
+    username = request.username.strip()
+    password = request.password
+    
+    if not username or not password:
+        raise HTTPException(status_code=400, detail="Username and password are required")
+        
+    user_check = execute_read("SELECT id FROM users WHERE username = %s", (username,))
+    if user_check:
+        raise HTTPException(status_code=400, detail="Username is already taken")
+        
+    from src.auth import hash_password
+    pwd_hash = hash_password(password)
+    
+    try:
+        execute_write(
+            "INSERT INTO users (username, password_hash) VALUES (%s, %s)",
+            (username, pwd_hash)
+        )
+        return {"success": True, "message": "User registered successfully"}
+    except Exception as e:
+        print(f"[API ERROR] User registration failed: {e}")
+        raise HTTPException(status_code=500, detail="User registration failed")
+
+
+@app.post("/auth/login")
+def login(request: AuthRequest):
+    username = request.username.strip()
+    password = request.password
+    
+    user_res = execute_read("SELECT id, username, password_hash FROM users WHERE username = %s", (username,))
+    if not user_res:
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+        
+    user = user_res[0]
+    from src.auth import verify_password, generate_token
+    if not verify_password(password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+        
+    token = generate_token(user["id"], user["username"])
+    return {
+        "success": True,
+        "token": token,
+        "username": user["username"]
+    }
+
+
 @app.get("/")
 def home():
     return {
@@ -101,7 +155,7 @@ def home():
 
 
 @app.post("/predict", response_model=PredictionResponse)
-def predict_fraud(transaction: Transaction):
+def predict_fraud(transaction: Transaction, user_id: int = Depends(get_current_user)):
     try:
         input_data = transaction.dict()
         
@@ -115,8 +169,8 @@ def predict_fraud(transaction: Transaction):
         features_json = json.dumps({f"V{i}": getattr(transaction, f"V{i}") for i in range(1, 29)})
         
         db_query = """
-        INSERT INTO transactions (amount, features, fraud_probability, prediction, status)
-        VALUES (%s, %s, %s, %s, %s)
+        INSERT INTO transactions (amount, features, fraud_probability, prediction, status, user_id)
+        VALUES (%s, %s, %s, %s, %s, %s)
         """
         
         # In Postgres, we use RETURNING id. In SQLite fallback, the db module strips it and returns cursor.lastrowid
@@ -126,7 +180,7 @@ def predict_fraud(transaction: Transaction):
             
         inserted_id = execute_write(
             db_query,
-            (transaction.Amount, features_json, result["fraud_probability"], result["prediction"], initial_status)
+            (transaction.Amount, features_json, result["fraud_probability"], result["prediction"], initial_status, user_id)
         )
         
         # Map returned ID to final output
@@ -143,7 +197,7 @@ def predict_fraud(transaction: Transaction):
 # ASYNCHRONOUS BATCH PROCESSING
 # -------------------------------------------------------------
 
-def process_batch_in_background(task_id: str, transactions_list: List[dict]):
+def process_batch_in_background(task_id: str, transactions_list: List[dict], user_id: int):
     """
     FastAPI Background Task to run large batch ML predictions asynchronously.
     Saves results incrementally to Database and exports a final CSV.
@@ -175,10 +229,10 @@ def process_batch_in_background(task_id: str, transactions_list: List[dict]):
                 # Increment DB
                 execute_write(
                     """
-                    INSERT INTO transactions (amount, features, fraud_probability, prediction, status)
-                    VALUES (%s, %s, %s, %s, %s)
+                    INSERT INTO transactions (amount, features, fraud_probability, prediction, status, user_id)
+                    VALUES (%s, %s, %s, %s, %s, %s)
                     """,
-                    (tx_inputs.get("Amount", 0.0), features_json, result["fraud_probability"], result["prediction"], initial_status)
+                    (tx_inputs.get("Amount", 0.0), features_json, result["fraud_probability"], result["prediction"], initial_status, user_id)
                 )
                 
                 # Assemble record for exported CSV
@@ -223,7 +277,7 @@ def process_batch_in_background(task_id: str, transactions_list: List[dict]):
 
 
 @app.post("/predict_batch")
-def predict_fraud_batch(transactions: List[Transaction], background_tasks: BackgroundTasks):
+def predict_fraud_batch(transactions: List[Transaction], background_tasks: BackgroundTasks, user_id: int = Depends(get_current_user)):
     try:
         # Generate an absolute unique ID
         task_id = str(uuid.uuid4())
@@ -231,8 +285,8 @@ def predict_fraud_batch(transactions: List[Transaction], background_tasks: Backg
         
         # Save placeholder in batch_jobs table
         execute_write(
-            "INSERT INTO batch_jobs (task_id, status, total_records, processed_records, progress_percent) VALUES (%s, %s, %s, %s, %s)",
-            (task_id, "pending", total_records, 0, 0)
+            "INSERT INTO batch_jobs (task_id, status, total_records, processed_records, progress_percent, user_id) VALUES (%s, %s, %s, %s, %s, %s)",
+            (task_id, "pending", total_records, 0, 0, user_id)
         )
         
         # Serialize Pydantic objects to dicts
@@ -242,7 +296,8 @@ def predict_fraud_batch(transactions: List[Transaction], background_tasks: Backg
         background_tasks.add_task(
             process_batch_in_background,
             task_id,
-            transactions_dict
+            transactions_dict,
+            user_id
         )
         
         return {
@@ -257,25 +312,32 @@ def predict_fraud_batch(transactions: List[Transaction], background_tasks: Backg
 
 
 @app.get("/batch/status/{task_id}")
-def get_batch_status(task_id: str):
-    query = "SELECT task_id, status, total_records, processed_records, progress_percent, results_file FROM batch_jobs WHERE task_id = %s"
-    res = execute_read(query, (task_id,))
-    
-    if not res:
-        raise HTTPException(status_code=404, detail="Batch task not found")
-        
-    return res[0]
-
-
-@app.get("/batch/download/{task_id}")
-def download_batch_results(task_id: str):
-    query = "SELECT status, results_file FROM batch_jobs WHERE task_id = %s"
+def get_batch_status(task_id: str, user_id: int = Depends(get_current_user)):
+    query = "SELECT task_id, status, total_records, processed_records, progress_percent, results_file, user_id FROM batch_jobs WHERE task_id = %s"
     res = execute_read(query, (task_id,))
     
     if not res:
         raise HTTPException(status_code=404, detail="Batch task not found")
         
     job = res[0]
+    if job.get("user_id") is not None and job["user_id"] != user_id:
+        raise HTTPException(status_code=403, detail="Access denied: You do not own this batch task")
+        
+    return job
+
+
+@app.get("/batch/download/{task_id}")
+def download_batch_results(task_id: str, user_id: int = Depends(get_current_user)):
+    query = "SELECT status, results_file, user_id FROM batch_jobs WHERE task_id = %s"
+    res = execute_read(query, (task_id,))
+    
+    if not res:
+        raise HTTPException(status_code=404, detail="Batch task not found")
+        
+    job = res[0]
+    if job.get("user_id") is not None and job["user_id"] != user_id:
+        raise HTTPException(status_code=403, detail="Access denied: You do not own this batch task")
+        
     if job["status"] != "completed" or not job["results_file"] or not os.path.exists(job["results_file"]):
         raise HTTPException(status_code=400, detail="Batch results file not ready or compilation failed")
         
@@ -298,7 +360,8 @@ def get_transactions(
     min_amount: Optional[float] = None,
     max_amount: Optional[float] = None,
     min_prob: Optional[float] = None,
-    max_prob: Optional[float] = None
+    max_prob: Optional[float] = None,
+    user_id: int = Depends(get_current_user)
 ):
     offset = (page - 1) * limit
     
@@ -307,8 +370,8 @@ def get_transactions(
     count_query = "SELECT COUNT(*) as total FROM transactions"
     
     # Build dynamic WHERE clause
-    where_clauses = []
-    params = []
+    where_clauses = ["user_id = %s"]
+    params = [user_id]
     
     if status:
         where_clauses.append("status = %s")
@@ -365,41 +428,8 @@ def get_transactions(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/transactions/{id}/status")
-def update_transaction_status(id: int, request: StatusUpdateRequest):
-    try:
-        # Check transaction exists
-        tx_check = execute_read("SELECT id, status FROM transactions WHERE id = %s", (id,))
-        if not tx_check:
-            raise HTTPException(status_code=404, detail="Transaction not found")
-            
-        old_status = tx_check[0]["status"]
-        new_status = request.status
-        
-        # Update transaction status
-        resolved_at = datetime.datetime.utcnow() if new_status in ["Approved", "Blocked"] else None
-        
-        update_query = "UPDATE transactions SET status = %s, resolved_at = %s WHERE id = %s"
-        execute_write(update_query, (new_status, resolved_at, id))
-        
-        # Write to audit logs
-        log_action = f"Status changed from '{old_status}' to '{new_status}'"
-        execute_write(
-            "INSERT INTO audit_logs (transaction_id, action, actor) VALUES (%s, %s, %s)",
-            (id, log_action, request.actor)
-        )
-        
-        return {
-            "success": True,
-            "id": id,
-            "status": new_status,
-            "resolved_at": resolved_at.isoformat() if resolved_at else None
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"[API ERROR] Status update failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+# Endpoint excised in prediction-only scope.
+# All status updating transitions are completely disabled in self-service predictive model.
 
 
 # -------------------------------------------------------------
@@ -407,56 +437,28 @@ def update_transaction_status(id: int, request: StatusUpdateRequest):
 # -------------------------------------------------------------
 
 @app.get("/dashboard/stats")
-def get_dashboard_statistics():
+def get_dashboard_statistics(user_id: int = Depends(get_current_user)):
     try:
-        # 1. Total Volume
-        vol_res = execute_read("SELECT COUNT(*) as cnt FROM transactions")
-        total_volume = vol_res[0]["cnt"] if vol_res else 0
+        # 1. Total Predictions
+        vol_res = execute_read("SELECT COUNT(*) as cnt FROM transactions WHERE user_id = %s", (user_id,))
+        total_predictions = vol_res[0]["cnt"] if vol_res else 0
         
-        # 2. Overall Fraud Rate
-        fraud_res = execute_read("SELECT COUNT(*) as cnt FROM transactions WHERE prediction = 'Fraud'")
-        fraud_count = fraud_res[0]["cnt"] if fraud_res else 0
-        fraud_rate = (fraud_count / total_volume * 100) if total_volume > 0 else 0.0
+        # 2. Fraud Flagged
+        fraud_res = execute_read("SELECT COUNT(*) as cnt FROM transactions WHERE prediction = 'Fraud' AND user_id = %s", (user_id,))
+        fraud_flagged = fraud_res[0]["cnt"] if fraud_res else 0
+        overall_fraud_rate = (fraud_flagged / total_predictions * 100) if total_predictions > 0 else 0.0
         
-        # 3. Pending Reviews
-        pending_res = execute_read("SELECT COUNT(*) as cnt FROM transactions WHERE status IN ('Pending Review', 'Investigating')")
-        pending_reviews = pending_res[0]["cnt"] if pending_res else 0
+        # 3. Average Risk Score
+        risk_res = execute_read("SELECT AVG(fraud_probability) as avg_risk FROM transactions WHERE user_id = %s", (user_id,))
+        average_risk_score = round(risk_res[0]["avg_risk"] * 100, 1) if (risk_res and risk_res[0]["avg_risk"] is not None) else 0.0
         
-        # 4. False Positive Ratio
-        # Number of genuine resolved alerts (Approved) vs total resolved alerts (Approved + Blocked)
-        approved_res = execute_read("SELECT COUNT(*) as cnt FROM transactions WHERE status = 'Approved'")
-        blocked_res = execute_read("SELECT COUNT(*) as cnt FROM transactions WHERE status = 'Blocked'")
-        approved_cnt = approved_res[0]["cnt"] if approved_res else 0
-        blocked_cnt = blocked_res[0]["cnt"] if blocked_res else 0
-        resolved_cnt = approved_cnt + blocked_cnt
-        false_positive_ratio = (approved_cnt / resolved_cnt * 100) if resolved_cnt > 0 else 0.0
+        # 4. Total Analyzed Volume ($)
+        sum_res = execute_read("SELECT SUM(amount) as total_sum FROM transactions WHERE user_id = %s", (user_id,))
+        total_analyzed_volume = round(sum_res[0]["total_sum"], 2) if (sum_res and sum_res[0]["total_sum"] is not None) else 0.0
         
-        # 5. Average Resolution Time (Calculated in Python for absolute database-independence)
-        times_res = execute_read("SELECT created_at, resolved_at FROM transactions WHERE status IN ('Approved', 'Blocked') AND resolved_at IS NOT NULL")
-        total_minutes = 0.0
-        counted_resolved = 0
-        
-        for t in times_res:
-            try:
-                # Convert timestamps if strings
-                c_at = t["created_at"]
-                r_at = t["resolved_at"]
-                
-                if isinstance(c_at, str):
-                    # Strip timezone offsets if present
-                    c_at = c_at.split("+")[0]
-                    c_at = datetime.datetime.fromisoformat(c_at)
-                if isinstance(r_at, str):
-                    r_at = r_at.split("+")[0]
-                    r_at = datetime.datetime.fromisoformat(r_at)
-                    
-                diff = r_at - c_at
-                total_minutes += diff.total_seconds() / 60.0
-                counted_resolved += 1
-            except Exception:
-                pass
-                
-        avg_res_time = (total_minutes / counted_resolved) if counted_resolved > 0 else 0.0
+        # 5. Highest Risk Transaction
+        max_res = execute_read("SELECT MAX(fraud_probability) as max_risk FROM transactions WHERE user_id = %s", (user_id,))
+        highest_risk_transaction = round(max_res[0]["max_risk"] * 100, 1) if (max_res and max_res[0]["max_risk"] is not None) else 0.0
         
         # 6. Timeline (Historical Data for the line charts)
         from src.db import IS_POSTGRES
@@ -466,6 +468,7 @@ def get_dashboard_statistics():
                    COUNT(*) as total_count, 
                    SUM(CASE WHEN prediction = 'Fraud' THEN 1 ELSE 0 END) as fraud_count
             FROM transactions
+            WHERE user_id = %s
             GROUP BY CAST(created_at AS DATE)
             ORDER BY tx_date DESC
             LIMIT 10;
@@ -476,12 +479,13 @@ def get_dashboard_statistics():
                    COUNT(*) as total_count, 
                    SUM(CASE WHEN prediction = 'Fraud' THEN 1 ELSE 0 END) as fraud_count
             FROM transactions
+            WHERE user_id = %s
             GROUP BY DATE(created_at)
             ORDER BY tx_date DESC
             LIMIT 10;
             """
             
-        timeline_res = execute_read(timeline_query)
+        timeline_res = execute_read(timeline_query, (user_id,))
         timeline = []
         for day in timeline_res:
             timeline.append({
@@ -505,7 +509,7 @@ def get_dashboard_statistics():
                 })
 
         # 7. Class Breakdown (🟢 Normal, 🔴 Fraud)
-        class_res = execute_read("SELECT prediction, COUNT(*) as cnt FROM transactions GROUP BY prediction")
+        class_res = execute_read("SELECT prediction, COUNT(*) as cnt FROM transactions WHERE user_id = %s GROUP BY prediction", (user_id,))
         breakdown = {"Normal": 0, "Fraud": 0}
         for r in class_res:
             pred = r.get("prediction", "Normal")
@@ -530,10 +534,10 @@ def get_dashboard_statistics():
         latest_fraud = execute_read("""
             SELECT id, amount, features, fraud_probability 
             FROM transactions 
-            WHERE prediction = 'Fraud' 
+            WHERE prediction = 'Fraud' AND user_id = %s
             ORDER BY created_at DESC 
             LIMIT 1
-        """)
+        """, (user_id,))
         
         latest_fraud_explanation = None
         if latest_fraud:
@@ -556,14 +560,13 @@ def get_dashboard_statistics():
             except Exception as exp_err:
                 print(f"[XAI DASHBOARD WARNING] Failed to calculate explanation: {exp_err}")
 
-
-
         return {
-            "total_volume": total_volume,
-            "overall_fraud_rate": round(fraud_rate, 2),
-            "pending_reviews": pending_reviews,
-            "false_positive_ratio": round(false_positive_ratio, 2),
-            "average_resolution_time": round(avg_res_time, 1),
+            "total_volume": int(total_predictions),
+            "overall_fraud_rate": round(overall_fraud_rate, 2),
+            "pending_reviews": int(fraud_flagged),
+            "false_positive_ratio": round(average_risk_score, 1),
+            "average_resolution_time": round(highest_risk_transaction, 1),
+            "total_analyzed_volume": float(total_analyzed_volume),
             "timeline": timeline,
             "class_breakdown": breakdown,
             "global_importances": global_imp,

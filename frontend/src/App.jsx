@@ -33,6 +33,71 @@ export default function App() {
     const [activeTab, setActiveTab] = useState("new");
     const [sidebarOpen, setSidebarOpen] = useState(false);
 
+    // Authentication session states
+    const [token, setToken] = useState(sessionStorage.getItem("fg_token") || "");
+    const [username, setUsername] = useState(sessionStorage.getItem("fg_username") || "");
+    
+    const [isRegistering, setIsRegistering] = useState(false);
+    const [authUsername, setAuthUsername] = useState("");
+    const [authPassword, setAuthPassword] = useState("");
+    const [authError, setAuthError] = useState("");
+    const [authLoading, setAuthLoading] = useState(false);
+
+    // Apply axios common auth header dynamically
+    useEffect(() => {
+        if (token) {
+            axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+            sessionStorage.setItem("fg_token", token);
+        } else {
+            delete axios.defaults.headers.common["Authorization"];
+            sessionStorage.removeItem("fg_token");
+        }
+    }, [token]);
+
+    useEffect(() => {
+        if (username) {
+            sessionStorage.setItem("fg_username", username);
+        } else {
+            sessionStorage.removeItem("fg_username");
+        }
+    }, [username]);
+
+    const handleAuthSubmit = async (e) => {
+        e.preventDefault();
+        setAuthError("");
+        setAuthLoading(true);
+
+        const endpoint = isRegistering ? "/auth/register" : "/auth/login";
+        try {
+            const res = await axios.post(`${API_BASE_URL}${endpoint}`, {
+                username: authUsername,
+                password: authPassword
+            });
+
+            if (isRegistering) {
+                // Automatically log in after successful registration
+                const loginRes = await axios.post(`${API_BASE_URL}/auth/login`, {
+                    username: authUsername,
+                    password: authPassword
+                });
+                setToken(loginRes.data.token);
+                setUsername(loginRes.data.username);
+            } else {
+                setToken(res.data.token);
+                setUsername(res.data.username);
+            }
+
+            setAuthUsername("");
+            setAuthPassword("");
+            setAuthError("");
+        } catch (err) {
+            console.error("Auth error:", err);
+            setAuthError(err.response?.data?.detail || "Authentication request failed.");
+        } finally {
+            setAuthLoading(false);
+        }
+    };
+
 
 
     // Dashboard states
@@ -106,11 +171,13 @@ export default function App() {
         }
     };
 
-    // Run on mount & tab changes
+    // Run on mount, auth, & tab changes
     useEffect(() => {
         document.documentElement.classList.remove("dark");
-        refreshAllData();
-    }, [page, statusFilter, activeTab]);
+        if (token) {
+            refreshAllData();
+        }
+    }, [page, statusFilter, activeTab, token]);
 
     // Handle transaction queue filter submissions
     const handleFilterReset = () => {
@@ -279,6 +346,81 @@ export default function App() {
         return () => clearInterval(intervalId);
     }, [batchTask]);
 
+    if (!token) {
+        return (
+            <div className="auth-container">
+                <div className="auth-card">
+                    <div className="brand" style={{ justifyContent: "center", marginBottom: "28px" }}>
+                        <div className="brand-logo">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                            </svg>
+                        </div>
+                        <h1 className="brand-name" style={{ fontSize: "20px" }}>FRAUDGUARD</h1>
+                    </div>
+
+                    <h2 className="auth-title">{isRegistering ? "Create your account" : "Sign in to Platform"}</h2>
+                    <p className="auth-subtitle">ML-powered instant self-service transaction classification.</p>
+
+                    {authError && (
+                        <div className="alert-banner" style={{ marginBottom: "20px" }}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                            <span>{authError}</span>
+                        </div>
+                    )}
+
+                    <form onSubmit={handleAuthSubmit} className="auth-form">
+                        <div className="form-group" style={{ marginBottom: "20px" }}>
+                            <label className="form-label">Username</label>
+                            <input
+                                type="text"
+                                className="filter-input"
+                                style={{ width: "100%", height: "42px" }}
+                                placeholder="Enter username"
+                                value={authUsername}
+                                onChange={(e) => setAuthUsername(e.target.value)}
+                                required
+                            />
+                        </div>
+
+                        <div className="form-group" style={{ marginBottom: "24px" }}>
+                            <label className="form-label">Password</label>
+                            <input
+                                type="password"
+                                className="filter-input"
+                                style={{ width: "100%", height: "42px" }}
+                                placeholder="Enter password"
+                                value={authPassword}
+                                onChange={(e) => setAuthPassword(e.target.value)}
+                                required
+                            />
+                        </div>
+
+                        <button type="submit" className="btn-primary" style={{ width: "100%", height: "44px", justifyContent: "center", marginBottom: "16px" }} disabled={authLoading}>
+                            {authLoading ? "Processing..." : isRegistering ? "Register Account" : "Sign In"}
+                        </button>
+
+                        <div style={{ textAlign: "center", fontSize: "13px" }}>
+                            <span style={{ color: "var(--text-secondary)" }}>
+                                {isRegistering ? "Already have an account? " : "New to FraudGuard? "}
+                            </span>
+                            <button
+                                type="button"
+                                style={{ background: "none", border: "none", color: "var(--primary)", fontWeight: "600", cursor: "pointer", padding: 0 }}
+                                onClick={() => {
+                                    setIsRegistering(!isRegistering);
+                                    setAuthError("");
+                                }}
+                            >
+                                {isRegistering ? "Sign In" : "Register Now"}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="app-container">
             {/* Sidebar Navigation Panel */}
@@ -332,12 +474,7 @@ export default function App() {
                         onClick={() => { setActiveTab("queue"); setSidebarOpen(false); }}
                     >
                         <ListFilter className="nav-icon" size={18} strokeWidth={2} />
-                        <span>Review Queue</span>
-                        {stats.pending_reviews > 0 && (
-                            <span className="badge pending-review" style={{ marginLeft: "auto", fontSize: "10px", padding: "2px 6px" }}>
-                                {stats.pending_reviews}
-                            </span>
-                        )}
+                        <span>Prediction History</span>
                     </div>
 
                     <div
@@ -345,14 +482,27 @@ export default function App() {
                         onClick={() => { setActiveTab("dashboard"); setSidebarOpen(false); }}
                     >
                         <LayoutDashboard className="nav-icon" size={18} strokeWidth={2} />
-                        <span>Analytics Dashboard</span>
+                        <span>Prediction Insights</span>
                     </div>
                 </nav>
 
                 <footer className="sidebar-footer">
-                    <div style={{ fontSize: "12px", color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: "8px", fontWeight: 500 }}>
-                        <span className="status-indicator"></span>
-                        <span>System Online</span>
+                    <div style={{ fontSize: "12px", color: "var(--text-secondary)", display: "flex", flexDirection: "column", gap: "8px", fontWeight: 500 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            <span className="status-indicator"></span>
+                            <span style={{ textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>Online: {username}</span>
+                        </div>
+                        <button
+                            type="button"
+                            className="btn-secondary"
+                            style={{ padding: "4px 8px", fontSize: "11px", height: "auto", border: "1px solid var(--border)", borderRadius: "6px" }}
+                            onClick={() => {
+                                setToken("");
+                                setUsername("");
+                            }}
+                        >
+                            Log Out
+                        </button>
                     </div>
                 </footer>
             </aside>

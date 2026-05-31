@@ -30,65 +30,65 @@ export default function AnalyticsDashboard({ stats }) {
     return (
         <div className="dashboard-content">
             <div className="page-header">
-                <h2 className="page-title">Operational Intelligence</h2>
-                <p className="page-subtitle">Real-time indicators and performance timeline for active classifiers.</p>
+                <h2 className="page-title">Prediction Insights</h2>
+                <p className="page-subtitle">Real-time prediction metrics and anomaly timeline for your submissions.</p>
             </div>
 
             {/* Summary statistics cards */}
             <div className="metrics-grid">
                 <div className="metric-card primary">
                     <div className="metric-header">
-                        <span className="metric-label">Analyzed Transactions</span>
+                        <span className="metric-label">Predictions Run</span>
                         <div className="metric-icon-wrap">
                             <TrendingUp size={16} />
                         </div>
                     </div>
                     <div className="metric-value">{stats.total_volume}</div>
-                    <div className="metric-desc">Persisted vectors in NeonDB</div>
+                    <div className="metric-desc">Total classification vectors logged</div>
                 </div>
 
                 <div className="metric-card error">
                     <div className="metric-header">
-                        <span className="metric-label">Overall Fraud Rate</span>
+                        <span className="metric-label">Flagged Fraud Rate</span>
                         <div className="metric-icon-wrap">
                             <AlertTriangle size={16} />
                         </div>
                     </div>
                     <div className="metric-value">{stats.overall_fraud_rate}%</div>
-                    <div className="metric-desc">Proportion of marked vectors</div>
+                    <div className="metric-desc">Percentage classified as Fraud</div>
                 </div>
 
                 <div className="metric-card warning">
                     <div className="metric-header">
-                        <span className="metric-label">Pending Reviews</span>
+                        <span className="metric-label">Flagged Anomalies</span>
                         <div className="metric-icon-wrap">
-                            <Clock size={16} />
+                            <Shield size={16} />
                         </div>
                     </div>
                     <div className="metric-value">{stats.pending_reviews}</div>
-                    <div className="metric-desc">Awaiting analyst review</div>
+                    <div className="metric-desc">Total anomalous transactions flagged</div>
                 </div>
 
                 <div className="metric-card info">
                     <div className="metric-header">
-                        <span className="metric-label">False Positive Ratio</span>
+                        <span className="metric-label">Average Risk Score</span>
                         <div className="metric-icon-wrap">
                             <CheckCircle2 size={16} />
                         </div>
                     </div>
                     <div className="metric-value">{stats.false_positive_ratio}%</div>
-                    <div className="metric-desc">Approved resolved reviews</div>
+                    <div className="metric-desc">Mean probability across predictions</div>
                 </div>
 
                 <div className="metric-card success">
                     <div className="metric-header">
-                        <span className="metric-label">Avg. Resolution Speed</span>
+                        <span className="metric-label">Peak Anomaly Risk</span>
                         <div className="metric-icon-wrap">
-                            <Clock size={16} />
+                            <AlertTriangle size={16} />
                         </div>
                     </div>
-                    <div className="metric-value">{stats.average_resolution_time}m</div>
-                    <div className="metric-desc">Average audit resolution time</div>
+                    <div className="metric-value">{stats.average_resolution_time}%</div>
+                    <div className="metric-desc">Maximum fraud probability recorded</div>
                 </div>
             </div>
 

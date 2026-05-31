@@ -9,8 +9,6 @@ export default function ReviewQueue({
     totalCount,
     page,
     setPage,
-    statusFilter,
-    setStatusFilter,
     minAmount,
     setMinAmount,
     maxAmount,
@@ -21,27 +19,12 @@ export default function ReviewQueue({
     return (
         <div>
             <div className="page-header">
-                <h2 className="page-title">Flagged Incidents review queue</h2>
-                <p className="page-subtitle">Investigate, resolve, and audit anomalies flagged by the active ML model.</p>
+                <h2 className="page-title">Prediction History</h2>
+                <p className="page-subtitle">Review all past classifications run on this platform.</p>
             </div>
 
             {/* Dynamic Search & Filters Row */}
             <div className="table-controls">
-                <div className="filter-group">
-                    <span className="filter-label">Alert Status</span>
-                    <select
-                        className="filter-input"
-                        value={statusFilter}
-                        onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-                    >
-                        <option value="">All Statuses</option>
-                        <option value="Pending Review">Pending Review</option>
-                        <option value="Investigating">Investigating</option>
-                        <option value="Approved">Approved (Legitimate)</option>
-                        <option value="Blocked">Blocked (Fraud)</option>
-                    </select>
-                </div>
-
                 <div className="filter-group">
                     <span className="filter-label">Min Amount</span>
                     <input
@@ -87,7 +70,6 @@ export default function ReviewQueue({
                                 <th>Amount</th>
                                 <th>Model Output Risk</th>
                                 <th>Classification</th>
-                                <th>Status</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -110,11 +92,6 @@ export default function ReviewQueue({
                                             {tx.prediction}
                                         </span>
                                     </td>
-                                    <td>
-                                        <span className={`badge ${tx.status.toLowerCase().replace(" ", "-")}`}>
-                                            {tx.status}
-                                        </span>
-                                    </td>
                                 </tr>
                             ))}
                         </tbody>
@@ -126,7 +103,7 @@ export default function ReviewQueue({
             {transactions.length > 0 && (
                 <div className="pagination">
                     <span>
-                        Showing Page {page} of {Math.ceil(totalCount / 15)} ({totalCount} total alerts)
+                        Showing Page {page} of {Math.ceil(totalCount / 15)} ({totalCount} total predictions)
                     </span>
                     <div className="pagination-controls">
                         <button

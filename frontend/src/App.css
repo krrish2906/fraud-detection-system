@@ -1336,3 +1336,61 @@ input[type="number"]::-webkit-outer-spin-button {
         display: none !important;
     }
 }
+
+/* ==========================================
+   AUTHENTICATION STYLING (LOGIN / SIGNUP)
+   ========================================== */
+.auth-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    width: 100%;
+    background-color: var(--bg-sidebar);
+    padding: 20px;
+    position: relative;
+    z-index: 10;
+}
+
+.auth-card {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 40px;
+    width: 100%;
+    max-width: 440px;
+    box-shadow: var(--shadow-xl);
+    transition: all 0.3s ease;
+    animation: fadeInAuth 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes fadeInAuth {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.auth-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+    text-align: center;
+}
+
+.auth-subtitle {
+    font-size: 13px;
+    color: var(--text-secondary);
+    text-align: center;
+    margin-bottom: 28px;
+}
+
+.auth-form {
+    display: flex;
+    flex-direction: column;
+}

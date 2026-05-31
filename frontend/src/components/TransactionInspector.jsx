@@ -1,14 +1,10 @@
 import {
-    X,
-    CheckCircle2,
-    Clock,
-    AlertTriangle
+    X
 } from "lucide-react";
 
 export default function TransactionInspector({
     selectedTx,
-    setSelectedTx,
-    handleUpdateStatus
+    setSelectedTx
 }) {
     if (!selectedTx) return null;
 
@@ -16,7 +12,7 @@ export default function TransactionInspector({
         <div className="inspect-drawer-overlay" onClick={() => setSelectedTx(null)}>
             <div className="inspect-drawer" onClick={(e) => e.stopPropagation()}>
                 <div className="drawer-header">
-                    <span className="drawer-title">Alert Details</span>
+                    <span className="drawer-title">Prediction Details</span>
                     <button className="btn-close" type="button" onClick={() => setSelectedTx(null)}>
                         <X size={18} />
                     </button>
@@ -27,7 +23,7 @@ export default function TransactionInspector({
                     <div className="drawer-section">
                         <div className="drawer-meta-grid">
                             <div className="drawer-meta-item">
-                                <div className="drawer-meta-label">Incident ID</div>
+                                <div className="drawer-meta-label">Prediction ID</div>
                                 <div className="drawer-meta-value">#{selectedTx.id || "Unsaved"}</div>
                             </div>
 
@@ -39,59 +35,22 @@ export default function TransactionInspector({
                             </div>
 
                             <div className="drawer-meta-item">
-                                <div className="drawer-meta-label">ML Predicted Risk</div>
+                                <div className="drawer-meta-label">Predicted Risk</div>
                                 <div className="drawer-meta-value" style={{ fontFamily: "var(--font-mono)", color: selectedTx.fraud_probability > 0.5 ? "var(--error)" : "var(--success)" }}>
                                     {(selectedTx.fraud_probability * 100).toFixed(2)}%
                                 </div>
                             </div>
 
                             <div className="drawer-meta-item">
-                                <div className="drawer-meta-label">Review Status</div>
+                                <div className="drawer-meta-label">Model Verdict</div>
                                 <div className="drawer-meta-value">
-                                    <span className={`badge ${selectedTx.status.toLowerCase().replace(" ", "-")}`}>
-                                        {selectedTx.status}
+                                    <span className={`badge ${selectedTx.prediction === "Fraud" ? "fraud" : "legitimate"}`}>
+                                        {selectedTx.prediction}
                                     </span>
                                 </div>
                             </div>
                         </div>
                     </div>
-
-                    {/* Status Update Action Drawer */}
-                    {selectedTx.id && (selectedTx.status === "Pending Review" || selectedTx.status === "Investigating") && (
-                        <div className="drawer-section">
-                            <span className="drawer-section-title">Audit Resolution Actions</span>
-                            <div className="action-row">
-                                <button
-                                    className="btn-action approve"
-                                    type="button"
-                                    onClick={() => handleUpdateStatus(selectedTx.id, "Approved")}
-                                >
-                                    <CheckCircle2 size={14} />
-                                    <span>Approve (Genuine)</span>
-                                </button>
-
-                                <button
-                                    className="btn-action block"
-                                    type="button"
-                                    onClick={() => handleUpdateStatus(selectedTx.id, "Blocked")}
-                                >
-                                    <X size={14} />
-                                    <span>Block (Fraud)</span>
-                                </button>
-
-                                {selectedTx.status === "Pending Review" && (
-                                    <button
-                                        className="btn-action investigate"
-                                        type="button"
-                                        onClick={() => handleUpdateStatus(selectedTx.id, "Investigating")}
-                                    >
-                                        <Clock size={14} />
-                                        <span>Investigate</span>
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                    )}
 
                     {/* Explainable AI (XAI) perturb bar charts */}
                     {selectedTx.explanation && (
