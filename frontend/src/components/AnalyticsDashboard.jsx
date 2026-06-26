@@ -1,5 +1,4 @@
-import { useState, useEffect } from "react";
-import axios from "axios";
+import { useEffect } from "react";
 import {
     ResponsiveContainer,
     AreaChart,
@@ -20,47 +19,23 @@ import {
     AlertTriangle,
     CheckCircle2,
     Shield,
-    DollarSign
+    DollarSign,
+    RefreshCw
 } from "lucide-react";
+import { useData } from "../context/DataContext";
 
 const renderPieSector = (props) => {
     return <Sector {...props} fill={props.payload?.fill || "var(--primary)"} />;
 };
 
-const INITIAL_STATS = {
-    total_volume: 0,
-    overall_fraud_rate: 0,
-    pending_reviews: 0,
-    false_positive_ratio: 0,
-    average_resolution_time: 0,
-    total_analyzed_volume: 0,
-    timeline: [],
-    class_breakdown: { Normal: 0, Fraud: 0 },
-    global_importances: [],
-    latest_fraud_explanation: null
-};
-
 export default function AnalyticsDashboard({ API_BASE_URL }) {
-    const [stats, setStats] = useState(INITIAL_STATS);
-    const [loading, setLoading] = useState(true);
+    const { stats: statsFromContext, statsLoading, fetchStats } = useData();
 
     useEffect(() => {
-        const fetchStats = async () => {
-            try {
-                setLoading(true);
-                const statsRes = await axios.get(`${API_BASE_URL}/dashboard/stats`);
-                setStats(statsRes.data);
-            } catch (err) {
-                console.error("Failed to load dashboard statistics:", err);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchStats();
+        fetchStats(API_BASE_URL);
     }, [API_BASE_URL]);
 
-    if (loading) {
+    if (!statsFromContext && statsLoading) {
         return (
             <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "400px", color: "var(--text-secondary)" }}>
                 <div style={{ textAlign: "center" }}>
@@ -71,11 +46,48 @@ export default function AnalyticsDashboard({ API_BASE_URL }) {
         );
     }
 
+    // Default structure fallback if server returned empty data or was unreached
+    const stats = statsFromContext || {
+        total_volume: 0,
+        overall_fraud_rate: 0,
+        pending_reviews: 0,
+        false_positive_ratio: 0,
+        average_resolution_time: 0,
+        total_analyzed_volume: 0,
+        timeline: [],
+        class_breakdown: { Normal: 0, Fraud: 0 },
+        global_importances: [],
+        latest_fraud_explanation: null
+    };
+
     return (
         <div className="dashboard-content">
-            <div className="page-header">
-                <h2 className="page-title">Prediction Insights</h2>
-                <p className="page-subtitle">Real-time prediction metrics and anomaly timeline for your submissions.</p>
+            <div className="page-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px", flexWrap: "wrap", marginBottom: "24px" }}>
+                <div>
+                    <h2 className="page-title">Prediction Insights</h2>
+                    <p className="page-subtitle">Real-time prediction metrics and anomaly timeline for your submissions.</p>
+                </div>
+                <button
+                    type="button"
+                    onClick={() => fetchStats(API_BASE_URL, true)}
+                    disabled={statsLoading}
+                    className="btn-secondary"
+                    style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        padding: "8px 16px",
+                        height: "38px"
+                    }}
+                >
+                    <RefreshCw
+                        size={14}
+                        style={{
+                            animation: statsLoading ? "spin 1s linear infinite" : "none"
+                        }}
+                    />
+                    <span>{statsLoading ? "Syncing..." : "Sync"}</span>
+                </button>
             </div>
 
             {/* Summary statistics cards */}

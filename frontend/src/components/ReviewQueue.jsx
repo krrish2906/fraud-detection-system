@@ -1,38 +1,23 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
 import {
     RotateCcw,
     ChevronLeft,
     ChevronRight
 } from "lucide-react";
+import { useData } from "../context/DataContext";
 
 export default function ReviewQueue({ API_BASE_URL, setSelectedTx }) {
-    const [transactions, setTransactions] = useState([]);
-    const [totalCount, setTotalCount] = useState(0);
-    const [page, setPage] = useState(1);
-    const [minAmount, setMinAmount] = useState("");
-    const [maxAmount, setMaxAmount] = useState("");
+    const { historyCache, historyLoading, fetchHistory } = useData();
+    const [page, setPage] = useState(historyCache.page);
+    const [minAmount, setMinAmount] = useState(historyCache.minAmount);
+    const [maxAmount, setMaxAmount] = useState(historyCache.maxAmount);
 
-    const fetchQueue = async () => {
-        try {
-            const params = {
-                page,
-                limit: 15,
-            };
-            if (minAmount) params.min_amount = parseFloat(minAmount);
-            if (maxAmount) params.max_amount = parseFloat(maxAmount);
+    const transactions = historyCache.items;
+    const totalCount = historyCache.totalCount;
 
-            const res = await axios.get(`${API_BASE_URL}/transactions`, { params });
-            setTransactions(res.data.items);
-            setTotalCount(res.data.total_count);
-        } catch (err) {
-            console.error("Failed to load transactions queue:", err);
-        }
-    };
-
-    // Refetch when filters or page changes
+    // Refetch/cache-lookup when filters or page changes
     useEffect(() => {
-        fetchQueue();
+        fetchHistory(API_BASE_URL, { page, minAmount, maxAmount });
     }, [page, minAmount, maxAmount, API_BASE_URL]);
 
     // Handle transaction queue filter submissions

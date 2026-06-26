@@ -5,10 +5,12 @@ import {
     AlertTriangle,
     FileDown
 } from "lucide-react";
+import { useData } from "../context/DataContext";
 
 const PCA_KEYS = Array.from({ length: 28 }, (_, i) => `V${i + 1}`);
 
 export default function BatchProcess({ API_BASE_URL }) {
+    const { fetchStats, fetchHistory } = useData();
     const [batchFile, setBatchFile] = useState(null);
     const [batchError, setBatchError] = useState("");
     const [batchStatus, setBatchStatus] = useState("");
@@ -91,6 +93,12 @@ export default function BatchProcess({ API_BASE_URL }) {
                     if (res.data.status === "completed" || res.data.status === "failed") {
                         clearInterval(intervalId);
                         setBatchTask(null);
+                        
+                        if (res.data.status === "completed") {
+                            // Refresh metrics and history immediately
+                            fetchStats(API_BASE_URL, true);
+                            fetchHistory(API_BASE_URL, { page: 1, minAmount: "", maxAmount: "" }, true);
+                        }
                     }
                 } catch (err) {
                     console.error("Error polling batch status:", err);

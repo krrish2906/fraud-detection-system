@@ -34,6 +34,18 @@ def startup_event():
     init_db()
     # Create directory for batch exports
     os.makedirs("batch_exports", exist_ok=True)
+    
+    # Warm-up the ML prediction pipeline to initialize the XGBoost C++ engine/thread pool
+    try:
+        print("[MODEL] Warming up prediction pipeline...")
+        dummy_input = {
+            "Amount": 100.0,
+            **{f"V{i}": 0.0 for i in range(1, 29)}
+        }
+        predict(dummy_input, skip_cache=True)
+        print("[MODEL] Prediction pipeline warmed up successfully.")
+    except Exception as e:
+        print(f"[MODEL WARNING] Warm-up failed: {e}")
 
 
 class Transaction(BaseModel):
@@ -80,6 +92,8 @@ class ExplanationResponse(BaseModel):
 
 class PredictionResponse(BaseModel):
     id: Optional[int] = None
+    amount: Optional[float] = None
+    features: Optional[dict] = None
     fraud_probability: float
     prediction: str
     status: Optional[str] = None
@@ -145,6 +159,19 @@ def login(request: AuthRequest):
     }
 
 
+@app.get("/auth/wake")
+def wake_up_db():
+    """
+    Public endpoint to pre-emptively wake up the database server (cold start mitigation).
+    """
+    try:
+        execute_read("SELECT 1")
+        return {"status": "awake", "database": "ready"}
+    except Exception as e:
+        print(f"[WAKEUP WARNING] Failed to ping database: {e}")
+        return {"status": "error", "message": str(e)}
+
+
 @app.get("/")
 def home():
     return {
@@ -186,6 +213,8 @@ def predict_fraud(transaction: Transaction, user_id: int = Depends(get_current_u
         # Map returned ID to final output
         result["id"] = inserted_id
         result["status"] = initial_status
+        result["amount"] = transaction.Amount
+        result["features"] = {f"V{i}": getattr(transaction, f"V{i}") for i in range(1, 29)}
         
         return result
     except Exception as e:

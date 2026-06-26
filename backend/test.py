@@ -2,7 +2,7 @@ from src.predictor import predict
 import pandas as pd
 
 # Take real sample
-sample = pd.read_csv("credit_data.csv").iloc[541]
+sample = pd.read_csv("../assets/credit_data.csv").iloc[541]
 
 input_data = {
     "Amount": sample["Amount"],

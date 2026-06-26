@@ -1,6 +1,7 @@
 import { useState } from "react";
 import axios from "axios";
 import { AlertTriangle } from "lucide-react";
+import { useData } from "../context/DataContext";
 
 const EMPTY_FORM = {
     Amount: "",
@@ -10,6 +11,7 @@ const EMPTY_FORM = {
 const PCA_KEYS = Array.from({ length: 28 }, (_, i) => `V${i + 1}`);
 
 export default function NewPrediction({ API_BASE_URL, onPredictionSuccess }) {
+    const { fetchStats, fetchHistory } = useData();
     const [formData, setFormData] = useState(EMPTY_FORM);
     const [loadingForm, setLoadingForm] = useState(false);
     const [errorBanner, setErrorBanner] = useState("");
@@ -61,6 +63,11 @@ export default function NewPrediction({ API_BASE_URL, onPredictionSuccess }) {
         setErrorBanner("");
         try {
             const res = await axios.post(`${API_BASE_URL}/predict`, formData);
+            
+            // Invalidate/refresh global context caches so changes propagate immediately
+            fetchStats(API_BASE_URL, true);
+            fetchHistory(API_BASE_URL, { page: 1, minAmount: "", maxAmount: "" }, true);
+            
             onPredictionSuccess(res.data);
             setFormData(EMPTY_FORM);
         } catch (err) {

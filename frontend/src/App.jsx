@@ -14,12 +14,14 @@ import TransactionInspector from "./components/TransactionInspector";
 import Login from "./components/Login";
 import Register from "./components/Register";
 import Sidebar from "./components/Sidebar";
+import { useData } from "./context/DataContext";
 
 import "./App.css";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
 export default function App() {
+    const { clearCache } = useData();
     const [activeTab, setActiveTab] = useState(sessionStorage.getItem("fg_active_tab") || "new");
     const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -59,6 +61,13 @@ export default function App() {
         document.documentElement.classList.remove("dark");
     }, []);
 
+    // Pre-emptively wake up Neon database cold-start in the background
+    useEffect(() => {
+        if (!token) {
+            axios.get(`${API_BASE_URL}/auth/wake`).catch(() => {});
+        }
+    }, [token]);
+
     if (!token) {
         return isRegistering ? (
             <Register
@@ -94,6 +103,7 @@ export default function App() {
                     setUsername("");
                     setActiveTab("new");
                     sessionStorage.removeItem("fg_active_tab");
+                    clearCache();
                 }}
             />
 
